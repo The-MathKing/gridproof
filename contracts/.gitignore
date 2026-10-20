@@ -1,0 +1,5 @@
+node_modules
+artifacts
+cache
+types
+deployments/localhost.json

@@ -1,0 +1,14 @@
+node_modules
+.venv
+.cache
+__pycache__
+dist
+artifacts
+cache
+types
+oracle/state
+deployments/localhost.json
+.node.log
+.pipeline.log
+.env
+.claude
