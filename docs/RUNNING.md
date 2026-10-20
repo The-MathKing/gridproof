@@ -47,11 +47,28 @@ Running the pipeline again on the same deployment is safe: it skips readings and
 
 Everything that runs locally runs on Sepolia unchanged. One wallet plays every role: it deploys the contracts, runs the oracle, holds the demo devices' certificates as a community-energy supplier, and acts as auditor. Buyers never send transactions; the supplier retires certificates on their behalf.
 
+### Quick path (no MetaMask, no keystore)
+
+```bash
+oracle/.venv/bin/python scripts/new-wallet.py
+```
+
+This creates a throwaway Sepolia wallet in `oracle/.env` (git-ignored, readable only by you) and prints its address. Paste the address into a faucet. Then:
+
+```bash
+./scripts/deploy-sepolia.sh
+```
+```bash
+cd oracle && PYTHONPATH=. .venv/bin/python -m gridproof.pipeline --days 2
+```
+
+The steps below do the same thing by hand with your own wallet.
+
 ### 1. Wallet and test ETH
 
 - Create a **new** wallet used only for this project (in MetaMask: *Add account*). Never use a wallet that holds real funds.
 - Get free Sepolia ETH from a faucet, for example Google Cloud's Web3 faucet (cloud.google.com/application/web3/faucet/ethereum/sepolia).
-- **How much you need.** Deploying takes about **5M gas** and a 2-day oracle run about **19M gas** (13 transactions, the largest 4.2M). At 1–5 gwei that's roughly **0.025–0.12 Sepolia ETH**. If you're short, use `--days 1`. The pipeline prints your balance before it starts, and if it runs out halfway you can top up and run it again: it skips everything already on-chain.
+- **How much you need.** Deploying takes about **5M gas** and a 2-day oracle run about **19M gas** (13 transactions, the largest 4.2M). What that costs depends on Sepolia's gas price: at 1 gwei it's about 0.025 ETH, and when the network is quiet (0.001 gwei on Oct 20 2026) it's practically nothing. If you're short, use `--days 1`. The pipeline prints your balance before it starts, and if it runs out halfway you can top up and run it again: it skips everything already on-chain.
 
 ### 2. Deploy the contracts
 
