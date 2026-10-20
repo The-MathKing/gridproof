@@ -41,6 +41,11 @@ class Buyer:
     base_w: int
     peak_w: int
 
+    @property
+    def address(self) -> str:
+        # Demo customer address. Customers never send transactions; the supplier retires for them.
+        return Account.from_key(keccak(text=f"gridproof-demo-buyer-{self.key}")).address
+
 
 DEVICES = [
     Device("brixton", "Brixton Solar Co-op", "solar", 200_000, 51.462, -0.115, 0.01),

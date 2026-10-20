@@ -195,6 +195,58 @@ describe("GranularCertificate", function () {
     });
   });
 
+  describe("batches", function () {
+    it("issues and quarantines a batch by anomaly score, and skips hours already recorded", async function () {
+      const { gc, oracle, farm, deviceId, hour, sign } = await networkHelpers.loadFixture(deploy);
+      const batch = [
+        { deviceId, hour: hour - 2, wh: 1000, anomalyBps: 100, deviceSig: await sign(1000, hour - 2) },
+        { deviceId, hour: hour - 1, wh: 4900, anomalyBps: 9500, deviceSig: await sign(4900, hour - 1) },
+        { deviceId, hour, wh: 2000, anomalyBps: 0, deviceSig: await sign(2000) },
+      ];
+      const [issued, quarantined, skipped] = await gc.connect(oracle).submitReadings.staticCall(batch);
+      expect([issued, quarantined, skipped]).to.deep.equal([2n, 1n, 0n]);
+      await gc.connect(oracle).submitReadings(batch);
+
+      const ids = await Promise.all(batch.map((r) => gc.tokenIdFor(r.deviceId, r.hour)));
+      expect(await gc.statusesOf(ids)).to.deep.equal([1n, 2n, 1n]);
+      expect(await gc.balanceOf(farm.address, ids[0])).to.equal(1000n);
+
+      // Re-sending the same batch (e.g. after a crash) changes nothing.
+      const again = await gc.connect(oracle).submitReadings.staticCall(batch);
+      expect(again[2]).to.equal(3n);
+    });
+
+    it("still rejects a forged reading inside a batch", async function () {
+      const { gc, oracle, deviceId, hour, sign } = await networkHelpers.loadFixture(deploy);
+      const attacker = ethers.Wallet.createRandom();
+      await expect(
+        gc.connect(oracle).submitReadings([
+          { deviceId, hour, wh: 1000, anomalyBps: 0, deviceSig: await sign(1000, hour, deviceId, attacker) },
+        ]),
+      ).to.be.revertedWithCustomError(gc, "BadDeviceSignature");
+    });
+
+    it("reports consecutive hourly loads and retires for many beneficiaries at once", async function () {
+      const { gc, oracle, farm, buyer, other, deviceId, hour, sign } = await networkHelpers.loadFixture(deploy);
+      await gc.connect(oracle).issue(deviceId, hour, 3000, 0, await sign(3000));
+      await gc.connect(oracle).reportLoads(buyer.address, hour, [2000, 2000]);
+      await gc.connect(oracle).reportLoads(other.address, hour, [4000]);
+      await gc.connect(oracle).setSurplusHours([hour], ethers.parseEther("1"));
+
+      const id = await gc.tokenIdFor(deviceId, hour);
+      // The device owner (a supplier) retires on behalf of two customers.
+      await gc.connect(farm).retireBatch([id, id], [1000, 2000], [buyer.address, other.address]);
+      expect(await gc.hourlyMatchBps(buyer.address, hour)).to.equal(5000);
+      expect(await gc.hourlyMatchBps(other.address, hour)).to.equal(5000);
+      expect(await gc.loadWh(buyer.address, hour + 1)).to.equal(2000n);
+
+      await expect(gc.connect(farm).retireBatch([id], [1, 1], [buyer.address])).to.be.revertedWithCustomError(
+        gc,
+        "LengthMismatch",
+      );
+    });
+  });
+
   describe("device registry", function () {
     it("stops issuance for a deactivated device", async function () {
       const { gc, registry, oracle, deviceId, hour, sign } = await networkHelpers.loadFixture(deploy);

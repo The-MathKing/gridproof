@@ -74,6 +74,7 @@ contract GranularCertificate is ERC1155, AccessControl {
     error AboveThreshold(uint16 anomalyBps);
     error NotQuarantined(uint256 tokenId);
     error ZeroAmount();
+    error LengthMismatch();
 
     constructor(address admin, DeviceRegistry registry_, ShiftReward reward_) ERC1155("") {
         registry = registry_;
@@ -106,6 +107,13 @@ contract GranularCertificate is ERC1155, AccessControl {
         returns (uint256 tokenId)
     {
         if (anomalyBps >= anomalyThresholdBps) revert AboveThreshold(anomalyBps);
+        return _issue(deviceId, hour, wh, anomalyBps, deviceSig);
+    }
+
+    function _issue(uint64 deviceId, uint32 hour, uint32 wh, uint16 anomalyBps, bytes calldata deviceSig)
+        private
+        returns (uint256 tokenId)
+    {
         DeviceRegistry.Device memory d;
         (tokenId, d) = _checkReading(deviceId, hour, wh, deviceSig);
         certificates[tokenId] = Certificate(Status.Issued, wh, anomalyBps, uint64(block.timestamp), 0);
@@ -120,9 +128,54 @@ contract GranularCertificate is ERC1155, AccessControl {
         onlyRole(ORACLE_ROLE)
         returns (uint256 tokenId)
     {
+        return _quarantine(deviceId, hour, wh, anomalyBps, deviceSig);
+    }
+
+    function _quarantine(uint64 deviceId, uint32 hour, uint32 wh, uint16 anomalyBps, bytes calldata deviceSig)
+        private
+        returns (uint256 tokenId)
+    {
         (tokenId,) = _checkReading(deviceId, hour, wh, deviceSig);
         certificates[tokenId] = Certificate(Status.Quarantined, wh, anomalyBps, uint64(block.timestamp), 0);
         emit Quarantined(tokenId, deviceId, hour, wh, anomalyBps);
+    }
+
+    struct Reading {
+        uint64 deviceId;
+        uint32 hour;
+        uint32 wh;
+        uint16 anomalyBps;
+        bytes deviceSig;
+    }
+
+    /// Submit many signed readings in one transaction. Each is issued or quarantined
+    /// by its anomaly score. Device-hours already recorded are skipped, so a run that
+    /// stopped half way can safely be sent again; any other bad reading reverts the batch.
+    function submitReadings(Reading[] calldata readings)
+        external
+        onlyRole(ORACLE_ROLE)
+        returns (uint256 issued, uint256 quarantined, uint256 skipped)
+    {
+        for (uint256 i = 0; i < readings.length; i++) {
+            Reading calldata r = readings[i];
+            if (certificates[tokenIdFor(r.deviceId, r.hour)].status != Status.None) {
+                skipped++;
+            } else if (r.anomalyBps >= anomalyThresholdBps) {
+                _quarantine(r.deviceId, r.hour, r.wh, r.anomalyBps, r.deviceSig);
+                quarantined++;
+            } else {
+                _issue(r.deviceId, r.hour, r.wh, r.anomalyBps, r.deviceSig);
+                issued++;
+            }
+        }
+    }
+
+    /// Status of many certificates at once (0 none, 1 issued, 2 quarantined, 3 rejected).
+    function statusesOf(uint256[] calldata tokenIds) external view returns (Status[] memory out) {
+        out = new Status[](tokenIds.length);
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            out[i] = certificates[tokenIds[i]].status;
+        }
     }
 
     /// Auditor decision on a quarantined reading: release mints it, otherwise it is rejected for good.
@@ -167,10 +220,31 @@ contract GranularCertificate is ERC1155, AccessControl {
         emit LoadReported(consumer, hour, wh);
     }
 
+    /// Consecutive hourly readings for one buyer, starting at `fromHour`.
+    function reportLoads(address consumer, uint32 fromHour, uint64[] calldata whs) external onlyRole(ORACLE_ROLE) {
+        for (uint256 i = 0; i < whs.length; i++) {
+            uint32 hour = fromHour + uint32(i);
+            loadWh[consumer][hour] = whs[i];
+            emit LoadReported(consumer, hour, whs[i]);
+        }
+    }
+
     /// Burn certificates to claim clean energy for `beneficiary`, in the
     /// certificate's own hour. Retiring more than the hour's load is allowed
     /// but the extra doesn't raise the hourly match above 100%.
-    function retire(uint256 tokenId, uint64 wh, address beneficiary) external {
+    function retire(uint256 tokenId, uint64 wh, address beneficiary) public {
+        _retire(tokenId, wh, beneficiary);
+    }
+
+    /// Many retirements in one transaction, for a supplier retiring on behalf of its customers.
+    function retireBatch(uint256[] calldata tokenIds, uint64[] calldata whs, address[] calldata beneficiaries) external {
+        if (tokenIds.length != whs.length || tokenIds.length != beneficiaries.length) revert LengthMismatch();
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            _retire(tokenIds[i], whs[i], beneficiaries[i]);
+        }
+    }
+
+    function _retire(uint256 tokenId, uint64 wh, address beneficiary) private {
         if (wh == 0) revert ZeroAmount();
         _burn(msg.sender, tokenId, wh);
         (, uint32 hour) = decode(tokenId);
@@ -209,6 +283,13 @@ contract GranularCertificate is ERC1155, AccessControl {
     function setSurplusHour(uint32 hour, uint256 bonusPerKWh) external onlyRole(ORACLE_ROLE) {
         surplusBonusPerKWh[hour] = bonusPerKWh;
         emit SurplusHourSet(hour, bonusPerKWh);
+    }
+
+    function setSurplusHours(uint32[] calldata hours_, uint256 bonusPerKWh) external onlyRole(ORACLE_ROLE) {
+        for (uint256 i = 0; i < hours_.length; i++) {
+            surplusBonusPerKWh[hours_[i]] = bonusPerKWh;
+            emit SurplusHourSet(hours_[i], bonusPerKWh);
+        }
     }
 
     function setAnomalyThreshold(uint16 thresholdBps) external onlyRole(DEFAULT_ADMIN_ROLE) {

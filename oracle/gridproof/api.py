@@ -83,7 +83,7 @@ def forecast():
 
 @app.get("/api/deployment")
 def deployment():
-    return json.loads((ROOT / "deployments" / "localhost.json").read_text())
+    return chain().deployment
 
 
 @app.get("/api/certificates/{token_id}")

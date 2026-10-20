@@ -145,3 +145,4 @@ input.text { border: 1px solid var(--border); background: var(--surface-1); bord
   .claim-compare { grid-template-columns: 1fr; }
   .claim .big { font-size: 36px; }
 }
+a { color: var(--series-1); }

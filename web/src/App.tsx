@@ -411,7 +411,10 @@ function ForecastView() {
 // ---------------------------------------------------------------- verify
 
 interface Deployment {
+  network: string;
   chainId: number;
+  publicRpc?: string;
+  explorer?: string | null;
   contracts: Record<string, { address: string; abi: unknown[] }>;
 }
 
@@ -423,7 +426,10 @@ function Verify({ summary }: { summary: Summary }) {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    get<Deployment>("/api/deployment").then(setDep);
+    get<Deployment>("/api/deployment").then((d) => {
+      setDep(d);
+      if (d.publicRpc) setRpc(d.publicRpc);
+    });
     get<Reading[]>("/api/readings?limit=400").then((rs) => {
       const r = rs.filter((x) => x.status === "issued").sort((a, b) => b.reported_wh - a.reported_wh)[0];
       if (r) setTokenId(r.token_id);
@@ -467,7 +473,9 @@ function Verify({ summary }: { summary: Summary }) {
     <section className="card">
       <div className="card-head">
         <h2>Check any certificate directly on the blockchain</h2>
-        <span className="muted">Your browser reads the contract itself. GridProof's servers aren't involved.</span>
+        <span className="muted">
+          Your browser reads the contract itself, on {dep?.network === "sepolia" ? "the Sepolia testnet" : "the local chain"}. GridProof's servers aren't involved.
+        </span>
       </div>
       <div className="grid-2">
         <label>
@@ -485,6 +493,19 @@ function Verify({ summary }: { summary: Summary }) {
         </button>
       </div>
       {err && <div className="notice">{err}</div>}
+      {result && dep?.explorer && (
+        <div className="legend">
+          <a href={`${dep.explorer}/nft/${dep.contracts.GranularCertificate.address}/${tokenId}`} target="_blank" rel="noreferrer">
+            This certificate on Etherscan ↗
+          </a>
+          <a href={`${dep.explorer}/address/${dep.contracts.GranularCertificate.address}`} target="_blank" rel="noreferrer">
+            Certificate contract ↗
+          </a>
+          <a href={`${dep.explorer}/address/${dep.contracts.DeviceRegistry.address}`} target="_blank" rel="noreferrer">
+            Device registry ↗
+          </a>
+        </div>
+      )}
       {result && (
         <dl className="kv">
           {Object.entries(result).map(([k, v]) => (

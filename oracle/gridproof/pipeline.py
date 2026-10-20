@@ -71,44 +71,51 @@ def run(days: int, seed: int = 42) -> None:
     # ---------------------------------------------------------------- chain: devices + certificates
     print("3/6 registering devices and issuing certificates on-chain")
     chain = Chain()
-    if chain.device_count() != 0:
-        raise SystemExit("This deployment already has data. Restart the node and redeploy for a clean run.")
-    for d, owner in zip(simulator.DEVICES, chain.owner_accounts):
-        chain.register_device(owner, d.account.address, d.capacity_w, d.kind, d.lat, d.lon, d.name)
-    chain.wait()
+    print(f"    network {chain.network}, operator {chain.operator}, balance {chain.balance_eth():.4f} ETH")
+    # The operator stands in for a community-energy supplier: it owns the demo devices'
+    # certificates and retires them on behalf of its customers.
+    existing = chain.device_count()
+    if existing == 0:
+        for d in simulator.DEVICES:
+            chain.register_device(chain.operator, d.account.address, d.capacity_w, d.kind, d.lat, d.lon, d.name)
+    elif existing != len(simulator.DEVICES):
+        raise SystemExit(f"Deployment has {existing} devices, expected {len(simulator.DEVICES)}. Redeploy.")
     device_ids = {d.key: i + 1 for i, d in enumerate(simulator.DEVICES)}
-    owners = {d.key: chain.owner_accounts[i] for i, d in enumerate(simulator.DEVICES)}
 
     records = []
     for key, df in scored.items():
-        d = per_device[key][0]
         dev_id = device_ids[key]
         for t, row in df[df.index >= window_start].iterrows():
-            wh = int(row["reported_wh"])
             hour = unix_hour(t)
-            rec = {
-                "device": key,
-                "time": t.isoformat(),
-                "hour": hour,
-                "token_id": str(chain.token_id(dev_id, hour)),
-                "expected_wh": int(row["expected_wh"]),
-                "max_plausible_wh": int(row["max_plausible_wh"]),
-                "reported_wh": wh,
-                "anomaly_bps": int(round(row["anomaly"] * 10000)),
-                "reasons": row["reasons"],
-                "fraud_label": row["fraud"],  # ground truth from the simulator, for scoring only
-                "status": "none",
-            }
-            if wh > 0:
-                sig = chain.sign_reading(d.account, dev_id, hour, wh)
-                if rec["anomaly_bps"] >= integrity.THRESHOLD * 10000:
-                    chain.quarantine(dev_id, hour, wh, rec["anomaly_bps"], sig)
-                    rec["status"] = "quarantined"
-                else:
-                    chain.issue(dev_id, hour, wh, rec["anomaly_bps"], sig)
-                    rec["status"] = "issued"
-            records.append(rec)
-    chain.wait()
+            records.append(
+                {
+                    "device": key,
+                    "time": t.isoformat(),
+                    "hour": hour,
+                    "token_id": str(chain.token_id(dev_id, hour)),
+                    "expected_wh": int(row["expected_wh"]),
+                    "max_plausible_wh": int(row["max_plausible_wh"]),
+                    "reported_wh": int(row["reported_wh"]),
+                    "anomaly_bps": int(round(row["anomaly"] * 10000)),
+                    "reasons": row["reasons"],
+                    "fraud_label": row["fraud"],  # ground truth from the simulator, for scoring only
+                    "status": "none",
+                }
+            )
+    producing = [r for r in records if r["reported_wh"] > 0]
+    on_chain = chain.statuses([int(r["token_id"]) for r in producing])
+    to_submit = []
+    meters = {d.key: d.account for d in simulator.DEVICES}
+    for r, status in zip(producing, on_chain):
+        if status != "none":  # recorded by an earlier run
+            r["status"] = status
+            continue
+        dev_id = device_ids[r["device"]]
+        sig = chain.sign_reading(meters[r["device"]], dev_id, r["hour"], r["reported_wh"])
+        to_submit.append((dev_id, r["hour"], r["reported_wh"], r["anomaly_bps"], sig))
+        r["status"] = "quarantined" if r["anomaly_bps"] >= integrity.THRESHOLD * 10000 else "issued"
+    print(f"    {len(to_submit)} new readings ({len(producing) - len(to_submit)} already on-chain)")
+    chain.submit_readings(to_submit)
     readings = pd.DataFrame(records)
 
     # ---------------------------------------------------------------- grid intensity + surplus hours
@@ -120,23 +127,25 @@ def run(days: int, seed: int = 42) -> None:
     for _, day in intensity.groupby(intensity.index.date):
         for t in surplus_hours(day["actual"]):
             surplus.add(unix_hour(t))
-    for h in surplus:
-        chain.set_surplus(h, BONUS_PER_KWH)
+    chain.set_surplus_hours(list(surplus), BONUS_PER_KWH)
 
     # ---------------------------------------------------------------- buyers: load, hourly market, retirement
     print("5/6 buyer load, hourly matching and retirement")
     hours_index = pd.date_range(window_start, last_finished, freq="1h", inclusive="left", tz="UTC")
+    first_hour = unix_hour(hours_index[0])
     loads = {b.key: simulator.buyer_load(b, hours_index, rng) for b in simulator.BUYERS}
-    buyer_addr = {b.key: chain.buyer_accounts[i] for i, b in enumerate(simulator.BUYERS)}
+    buyer_addr = {b.key: b.address for b in simulator.BUYERS}
     for b in simulator.BUYERS:
-        for t, wh in loads[b.key].items():
-            chain.report_load(buyer_addr[b.key], unix_hour(t), int(wh))
+        chain.report_loads(buyer_addr[b.key], first_hour, [int(w) for w in loads[b.key].values])
 
+    # Hours already retired by an earlier run are left alone.
+    already = {(b, unix_hour(t)) for b in buyer_addr for t in hours_index if chain.matched(buyer_addr[b], unix_hour(t))[1] > 0}
     issued = readings[readings["status"] == "issued"]
+    retirements = []
     for t in hours_index:
         h = unix_hour(t)
         supply = issued[issued["hour"] == h]
-        demand = {b: int(loads[b].loc[t]) for b in loads}
+        demand = {b: int(loads[b].loc[t]) for b in loads if (b, h) not in already}
         total_demand = sum(demand.values())
         if supply.empty or total_demand == 0:
             continue
@@ -148,11 +157,10 @@ def run(days: int, seed: int = 42) -> None:
                 share = min(need, int(cert["reported_wh"] * need / total_demand), remaining)
                 if share <= 0:
                     continue
-                chain.transfer(owners[cert["device"]], buyer_addr[b], int(cert["token_id"]), share)
-                chain.retire(buyer_addr[b], int(cert["token_id"]), share, buyer_addr[b])
+                retirements.append((int(cert["token_id"]), share, buyer_addr[b]))
                 demand[b] -= share
                 remaining -= share
-    chain.wait()
+    chain.retire_batch(retirements)
 
     # ---------------------------------------------------------------- accounting from the chain
     buyers_out = []
@@ -231,7 +239,7 @@ def run(days: int, seed: int = 42) -> None:
             "lat": d.lat,
             "lon": d.lon,
             "meter": d.account.address,
-            "owner": owners[d.key],
+            "owner": chain.operator,
             "risk": risk[d.key],
         }
         for d in simulator.DEVICES
@@ -244,7 +252,17 @@ def run(days: int, seed: int = 42) -> None:
     dump("readings", readings.to_dict(orient="records"))
     dump("buyers", buyers_out)
     dump("forecast", forecast_out)
-    dump("metrics", {**metrics, "generated_at": datetime.now(timezone.utc).isoformat(), "days": days})
+    chain_info = {
+        "network": chain.network,
+        "explorer": chain.deployment.get("explorer"),
+        "operator": chain.operator,
+        "transactions": chain.tx_count,
+        "gas_used": chain.gas_used,
+        "max_tx_gas": chain.max_tx_gas,
+        "fees_eth": chain.fees_wei / 1e18,
+    }
+    dump("metrics", {**metrics, "chain": chain_info, "generated_at": datetime.now(timezone.utc).isoformat(), "days": days})
+    print(f"chain: {chain.tx_count} transactions, {chain.gas_used:,} gas (largest {chain.max_tx_gas:,}), {chain.fees_wei / 1e18:.5f} ETH in fees")
     print(json.dumps({"window": metrics["window"], "buyers": [{k: v for k, v in b.items() if k != "hourly"} for b in buyers_out], "forecast": fc.metrics}, indent=1))
 
 

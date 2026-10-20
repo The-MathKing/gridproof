@@ -113,7 +113,7 @@ Numbers change from run to run because the data is live.
 ## Repo layout
 
 ```
-contracts/   Hardhat 3 project: Solidity contracts, 16 tests, deploy script
+contracts/   Hardhat 3 project: Solidity contracts, 19 tests, deploy script
 oracle/      Python: data fetchers, device simulator, integrity AI, forecaster, FastAPI, chain client
 web/         Dashboard (Vite + React + ethers)
 scripts/     demo.sh: one command runs the whole thing
