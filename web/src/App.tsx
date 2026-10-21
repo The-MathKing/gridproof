@@ -4,9 +4,24 @@ import { HourlyBars, LineChart, MatchHeatmap } from "./charts";
 import { fmtTime, get, kwh, pct, post, type Buyer, type Forecast, type Reading, type Summary } from "./api";
 
 type Tab = "buyers" | "integrity" | "forecast" | "verify";
+const TABS: Tab[] = ["buyers", "integrity", "forecast", "verify"];
+// Each tab has its own URL (#integrity etc.) so pages can be linked directly.
+const tabFromHash = (): Tab => {
+  const h = window.location.hash.slice(1) as Tab;
+  return TABS.includes(h) ? h : "buyers";
+};
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("buyers");
+  const [tab, setTabState] = useState<Tab>(tabFromHash);
+  const setTab = (t: Tab) => {
+    window.history.replaceState(null, "", `#${t}`);
+    setTabState(t);
+  };
+  useEffect(() => {
+    const onHash = () => setTabState(tabFromHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -468,6 +483,16 @@ function Verify({ summary }: { summary: Summary }) {
       setErr(String(e));
     }
   };
+
+  // Check the default certificate as soon as everything is loaded, so the page opens with a result.
+  const [autoRan, setAutoRan] = useState(false);
+  useEffect(() => {
+    if (dep && tokenId && !autoRan) {
+      setAutoRan(true);
+      verify();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dep, tokenId, autoRan]);
 
   return (
     <section className="card">
