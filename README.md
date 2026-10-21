@@ -80,13 +80,13 @@ An **AI forecaster** then turns transparency into action. It predicts the next 2
 
 ## Live on the Sepolia testnet
 
-Seven days of certificates (442 issued, 9 quarantined by the AI check), hour-matched retirements and buyer loads are recorded on Ethereum Sepolia. Anyone can check them on Etherscan:
+Seven days of certificates (442 issued, 9 quarantined by the AI check), hour-matched retirements and buyer loads are recorded on Ethereum Sepolia. Anyone can check them on Etherscan, where the contract source code is verified:
 
 | Contract | Address | Verified source |
 |---|---|---|
-| GranularCertificate (ERC-1155) | [`0x76343ecE6Ee6aFB69e37c565e6badFeE706A3BB1`](https://sepolia.etherscan.io/address/0x76343ecE6Ee6aFB69e37c565e6badFeE706A3BB1) | [Sourcify](https://sourcify.dev/server/repo-ui/11155111/0x76343ecE6Ee6aFB69e37c565e6badFeE706A3BB1) |
-| DeviceRegistry | [`0x1619ac1E123BfaaC5a7548d311440693Cb5173Ac`](https://sepolia.etherscan.io/address/0x1619ac1E123BfaaC5a7548d311440693Cb5173Ac) | [Sourcify](https://sourcify.dev/server/repo-ui/11155111/0x1619ac1E123BfaaC5a7548d311440693Cb5173Ac) · [Blockscout](https://eth-sepolia.blockscout.com/address/0x1619ac1E123BfaaC5a7548d311440693Cb5173Ac#code) |
-| ShiftReward (GSHIFT) | [`0xB2Ad7d0e46DbaD62827b94425455d25d4065386c`](https://sepolia.etherscan.io/address/0xB2Ad7d0e46DbaD62827b94425455d25d4065386c) | [Sourcify](https://sourcify.dev/server/repo-ui/11155111/0xB2Ad7d0e46DbaD62827b94425455d25d4065386c) · [Blockscout](https://eth-sepolia.blockscout.com/address/0xB2Ad7d0e46DbaD62827b94425455d25d4065386c#code) |
+| GranularCertificate (ERC-1155) | [`0x76343ecE6Ee6aFB69e37c565e6badFeE706A3BB1`](https://sepolia.etherscan.io/address/0x76343ecE6Ee6aFB69e37c565e6badFeE706A3BB1) | [Etherscan](https://sepolia.etherscan.io/address/0x76343ecE6Ee6aFB69e37c565e6badFeE706A3BB1#code) · [Sourcify](https://sourcify.dev/server/repo-ui/11155111/0x76343ecE6Ee6aFB69e37c565e6badFeE706A3BB1) |
+| DeviceRegistry | [`0x1619ac1E123BfaaC5a7548d311440693Cb5173Ac`](https://sepolia.etherscan.io/address/0x1619ac1E123BfaaC5a7548d311440693Cb5173Ac) | [Etherscan](https://sepolia.etherscan.io/address/0x1619ac1E123BfaaC5a7548d311440693Cb5173Ac#code) · [Sourcify](https://sourcify.dev/server/repo-ui/11155111/0x1619ac1E123BfaaC5a7548d311440693Cb5173Ac) · [Blockscout](https://eth-sepolia.blockscout.com/address/0x1619ac1E123BfaaC5a7548d311440693Cb5173Ac#code) |
+| ShiftReward (GSHIFT) | [`0xB2Ad7d0e46DbaD62827b94425455d25d4065386c`](https://sepolia.etherscan.io/address/0xB2Ad7d0e46DbaD62827b94425455d25d4065386c) | [Etherscan](https://sepolia.etherscan.io/address/0xB2Ad7d0e46DbaD62827b94425455d25d4065386c#code) · [Sourcify](https://sourcify.dev/server/repo-ui/11155111/0xB2Ad7d0e46DbaD62827b94425455d25d4065386c) · [Blockscout](https://eth-sepolia.blockscout.com/address/0xB2Ad7d0e46DbaD62827b94425455d25d4065386c#code) |
 
 Running the whole week cost under 0.001 Sepolia ETH, because batching puts a day of hourly certificates in a handful of transactions. On a low-fee L2 the same design would cost fractions of a cent per device per day.
 
