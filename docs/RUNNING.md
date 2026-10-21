@@ -116,11 +116,12 @@ With `GRIDPROOF_NETWORK=sepolia` in `oracle/.env`, the API reads the Sepolia dep
 
 ### 5. (Optional) Publish the source code on Etherscan
 
-```bash
-cd contracts && npx hardhat keystore set ETHERSCAN_API_KEY
-```
+Add `ETHERSCAN_API_KEY=<your key>` as a line in `oracle/.env` (or run `npx hardhat keystore set ETHERSCAN_API_KEY` in `contracts/`). Then:
+
 ```bash
 ./scripts/verify-sepolia.sh
 ```
+
+This also publishes to Sourcify and Blockscout, which need no key.
 
 The API key is free from etherscan.io. Verified source lets judges read the exact code behind each certificate.

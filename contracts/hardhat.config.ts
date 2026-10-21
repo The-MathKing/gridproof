@@ -11,6 +11,8 @@ export default defineConfig({
   // Optional: only needed for `hardhat verify`, set with `npx hardhat keystore set ETHERSCAN_API_KEY`.
   verify: {
     etherscan: { apiKey: configVariable("ETHERSCAN_API_KEY") },
+    blockscout: { enabled: true },
+    sourcify: { enabled: true },
   },
   networks: {
     localhost: { type: "http", chainType: "l1", url: "http://127.0.0.1:8545" },
