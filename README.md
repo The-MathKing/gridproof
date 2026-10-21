@@ -78,7 +78,19 @@ An **AI forecaster** then turns transparency into action. It predicts the next 2
 - The AI check is a second line of defence against a compromised or tampered device. Its verdict and anomaly score are stored with each certificate.
 - Only weather data and hourly totals go on-chain. No personal data does.
 
-## Results (local run, 7 days ending Oct 20 2026, real UK weather and grid data)
+## Live on the Sepolia testnet
+
+Seven days of certificates (442 issued, 9 quarantined by the AI check), hour-matched retirements and buyer loads are recorded on Ethereum Sepolia. Anyone can check them on Etherscan:
+
+| Contract | Address |
+|---|---|
+| GranularCertificate (ERC-1155) | [`0x76343ecE6Ee6aFB69e37c565e6badFeE706A3BB1`](https://sepolia.etherscan.io/address/0x76343ecE6Ee6aFB69e37c565e6badFeE706A3BB1) |
+| DeviceRegistry | [`0x1619ac1E123BfaaC5a7548d311440693Cb5173Ac`](https://sepolia.etherscan.io/address/0x1619ac1E123BfaaC5a7548d311440693Cb5173Ac) |
+| ShiftReward (GSHIFT) | [`0xB2Ad7d0e46DbaD62827b94425455d25d4065386c`](https://sepolia.etherscan.io/address/0xB2Ad7d0e46DbaD62827b94425455d25d4065386c) |
+
+Running the whole week cost under 0.001 Sepolia ETH, because batching puts a day of hourly certificates in a handful of transactions. On a low-fee L2 the same design would cost fractions of a cent per device per day.
+
+## Results (7 days ending Oct 20 2026, real UK weather and grid data)
 
 **The headline: every buyer can claim "100% renewable" under annual-style accounting, but the real hourly match is 52–61%.**
 
@@ -107,7 +119,7 @@ Numbers change from run to run because the data is live.
 ## Honest limitations
 
 - Meter readings are simulated, driven by real weather. A real deployment would read signed data from smart meters or inverters (many already support signed telemetry).
-- The local demo runs on a Hardhat chain. The contracts are standard EVM, so they could be deployed to a public testnet or a low-fee L2.
+- Deployed on the Sepolia testnet, not mainnet. The contracts are standard EVM, so a production version would most likely run on a low-fee L2.
 - Certificates are only unique *within GridProof*. Ending cross-registry double counting needs existing registries to bridge in or out, which is a policy step, not a technical one.
 
 ## Repo layout

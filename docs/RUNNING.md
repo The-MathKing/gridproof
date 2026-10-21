@@ -59,8 +59,13 @@ This creates a throwaway Sepolia wallet in `oracle/.env` (git-ignored, readable 
 ./scripts/deploy-sepolia.sh
 ```
 ```bash
-cd oracle && PYTHONPATH=. .venv/bin/python -m gridproof.pipeline --days 2
+cd oracle && PYTHONPATH=. .venv/bin/python -m gridproof.pipeline --days 7
 ```
+```bash
+./scripts/serve-sepolia.sh
+```
+
+The last command serves the dashboard at http://localhost:8000 against the Sepolia contracts. `./scripts/demo.sh` always uses the local chain, even when `oracle/.env` is set up for Sepolia, and each network keeps its own results in `oracle/state/<network>/`.
 
 The steps below do the same thing by hand with your own wallet.
 
@@ -68,7 +73,7 @@ The steps below do the same thing by hand with your own wallet.
 
 - Create a **new** wallet used only for this project (in MetaMask: *Add account*). Never use a wallet that holds real funds.
 - Get free Sepolia ETH from a faucet, for example Google Cloud's Web3 faucet (cloud.google.com/application/web3/faucet/ethereum/sepolia).
-- **How much you need.** Deploying takes about **5M gas** and a 2-day oracle run about **19M gas** (13 transactions, the largest 4.2M). What that costs depends on Sepolia's gas price: at 1 gwei it's about 0.025 ETH, and when the network is quiet (0.001 gwei on Oct 20 2026) it's practically nothing. If you're short, use `--days 1`. The pipeline prints your balance before it starts, and if it runs out halfway you can top up and run it again: it skips everything already on-chain.
+- **How much you need.** Gas on Sepolia runs about 3.5× the local chain: a 2-day oracle run measured **68M gas**, and batches are sized to stay well under Sepolia's ~16.7M per-transaction cap. On Oct 20 2026 the deploy plus a 2-day run cost under 0.001 ETH, because the base fee was close to zero. The deploy script pays the base fee plus a 0.01 gwei tip, not ethers' default 1 gwei, so a single 0.05 ETH faucet drip goes a long way. If you're short, use `--days 1`. The pipeline prints your balance before it starts, and if it runs out halfway you can top up and run it again: it skips everything already on-chain.
 
 ### 2. Deploy the contracts
 

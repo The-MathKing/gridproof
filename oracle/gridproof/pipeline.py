@@ -17,10 +17,10 @@ import numpy as np
 import pandas as pd
 
 from . import data, integrity, simulator
-from .chain import Chain
+from .chain import Chain, current_network
 from .forecast import IntensityForecaster, surplus_hours
 
-STATE = Path(__file__).resolve().parent.parent / "state"
+STATE = Path(__file__).resolve().parent.parent / "state" / current_network()
 HISTORY_DAYS = 60
 BONUS_PER_KWH = 10**18  # 1 GSHIFT per kWh used in a surplus hour
 
@@ -30,7 +30,7 @@ def unix_hour(ts: pd.Timestamp) -> int:
 
 
 def run(days: int, seed: int = 42) -> None:
-    STATE.mkdir(exist_ok=True)
+    STATE.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(seed)
     now = pd.Timestamp.now(tz="UTC").floor("h")
     window_start = now - pd.Timedelta(days=days)
@@ -107,8 +107,9 @@ def run(days: int, seed: int = 42) -> None:
     to_submit = []
     meters = {d.key: d.account for d in simulator.DEVICES}
     for r, status in zip(producing, on_chain):
-        if status != "none":  # recorded by an earlier run
+        if status != "none":  # recorded by an earlier run: the chain's numbers are the truth
             r["status"] = status
+            r["reported_wh"] = chain.certificate(int(r["token_id"]))["wh"]
             continue
         dev_id = device_ids[r["device"]]
         sig = chain.sign_reading(meters[r["device"]], dev_id, r["hour"], r["reported_wh"])

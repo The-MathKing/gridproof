@@ -4,6 +4,8 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DAYS="${DAYS:-7}"
+# Always the local chain here, even if oracle/.env is set up for Sepolia.
+export GRIDPROOF_NETWORK=localhost GRIDPROOF_RPC_URL=http://127.0.0.1:8545 GRIDPROOF_PRIVATE_KEY=
 
 cleanup() { kill $(jobs -p) 2>/dev/null || true; }
 trap cleanup EXIT

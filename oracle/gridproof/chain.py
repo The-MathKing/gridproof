@@ -41,14 +41,20 @@ def _load_dotenv() -> None:
             os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
 
 
+_load_dotenv()
+
+
+def current_network() -> str:
+    return os.environ.get("GRIDPROOF_NETWORK", "localhost")
+
+
 class TxFailed(RuntimeError):
     pass
 
 
 class Chain:
     def __init__(self, network: str | None = None, rpc: str | None = None):
-        _load_dotenv()
-        self.network = network or os.environ.get("GRIDPROOF_NETWORK", "localhost")
+        self.network = network or current_network()
         dep_path = ROOT / "deployments" / f"{self.network}.json"
         if not dep_path.exists():
             raise SystemExit(f"No deployment for {self.network}. Deploy the contracts first ({dep_path}).")
@@ -104,9 +110,9 @@ class Chain:
         self.max_tx_gas = max(self.max_tx_gas, receipt["gasUsed"])
         self.fees_wei += receipt["gasUsed"] * receipt.get("effectiveGasPrice", 0)
         if receipt["status"] != 1:
-            raise TxFailed(f"{label or 'transaction'} reverted: {tx_hash.hex()}")
+            raise TxFailed(f"{label or 'transaction'} reverted: {tx_hash.to_0x_hex()}")
         if self.network != "localhost" and label:
-            print(f"    {label}: {tx_hash.hex()} (gas {receipt['gasUsed']:,})")
+            print(f"    {label}: {self.explorer_tx(tx_hash.to_0x_hex())} (gas {receipt['gasUsed']:,})")
         return receipt
 
     def explorer_tx(self, tx_hash: str) -> str | None:
@@ -146,7 +152,7 @@ class Chain:
             f"register {name}",
         )
 
-    def submit_readings(self, readings: list[tuple[int, int, int, int, bytes]], batch: int = 60):
+    def submit_readings(self, readings: list[tuple[int, int, int, int, bytes]], batch: int = 25):
         """readings: (device_id, hour, wh, anomaly_bps, device_sig). Issued or quarantined on-chain by score."""
         for i, chunk in enumerate(self._chunks(readings, batch)):
             self._send(self.gc.functions.submitReadings([list(r) for r in chunk]), f"readings batch {i + 1}")
@@ -154,7 +160,7 @@ class Chain:
     def resolve(self, token_id: int, release: bool):
         return self._send(self.gc.functions.resolveQuarantine(token_id, release), "auditor decision")
 
-    def report_loads(self, consumer: str, from_hour: int, whs: list[int], batch: int = 168):
+    def report_loads(self, consumer: str, from_hour: int, whs: list[int], batch: int = 72):
         for i, chunk in enumerate(self._chunks(whs, batch)):
             self._send(self.gc.functions.reportLoads(consumer, from_hour + i * batch, chunk), "buyer load")
 
@@ -162,7 +168,7 @@ class Chain:
         if hours:
             self._send(self.gc.functions.setSurplusHours(sorted(hours), bonus_per_kwh_wei), "surplus hours")
 
-    def retire_batch(self, retirements: list[tuple[int, int, str]], batch: int = 120):
+    def retire_batch(self, retirements: list[tuple[int, int, str]], batch: int = 50):
         """retirements: (token_id, wh, beneficiary), retired from the operator's own balance."""
         for i, chunk in enumerate(self._chunks(retirements, batch)):
             ids, whs, bens = zip(*chunk)

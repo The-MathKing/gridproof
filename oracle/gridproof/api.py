@@ -16,9 +16,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from .chain import ROOT, Chain
+from .chain import ROOT, Chain, current_network
 
-STATE = Path(__file__).resolve().parent.parent / "state"
+STATE = Path(__file__).resolve().parent.parent / "state" / current_network()
 WEB_DIST = ROOT / "web" / "dist"
 
 app = FastAPI(title="GridProof oracle")
